@@ -10,9 +10,11 @@ const client = require('./db'); // Importing the db connection
 const authenticateJWT = require('./middleware/auth'); // Importing the authentication middleware
 
 // Importing route files
+// Importing route files
 const fileRoute = require('./route/fileroutes');
-const folderRoute = require('./route/folderroute');
+const folderRoute = require('./route/folderroute'); 
 const authRoute = require('./route/authroute');
+
 
 
 const app = express();
@@ -23,7 +25,7 @@ console.log("JWT_SECRET:", process.env.JWT_SECRET);
 
 // Enable CORS for all routes
 app.use(cors({
-    origin: 'http://localhost:3000',
+    origin: 'http://localhost:3001',
     methods: ['GET', 'POST', 'DELETE'],
     preflightContinue: true,
 }));

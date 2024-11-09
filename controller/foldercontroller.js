@@ -1,207 +1,154 @@
-// controllers/FolderController.js
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
+const db = require("../db"); // Import the database client
 
-// Define the uploads directory
-const UPLOADS_DIR = path.join(__dirname, '../uploads');
+const UPLOADS_DIR = path.join(__dirname, "../uploads");
 
 
-exports.createFolder = (req, res) => {
-    const { folderName } = req.body;
 
-    if (!folderName) {
-        return res.status(400).send('Folder name is required');
-    }
-
-    const folderPath = path.join(UPLOADS_DIR, folderName);
-
-    if (!fs.existsSync(folderPath)) {
-        fs.mkdirSync(folderPath);
-        console.log(`Created folder: ${folderPath}`);
-        return res.status(201).send('Folder created successfully');
-    } else {
-        console.log(`Folder already exists: ${folderPath}`);
-        return res.status(400).send('Folder already exists');
-    }
+// Helper function to create a directory if it doesn't exist
+const ensureDirectoryExists = (folderPath) => {
+  if (!fs.existsSync(folderPath)) {
+    fs.mkdirSync(folderPath, { recursive: true });
+  }
 };
 
-exports.createSubfolder = (req, res) => {
-    const { parentFolderName, subfolderName } = req.body;
-
-    if (!parentFolderName || !subfolderName) {
-        return res.status(400).send('Both parent folder name and subfolder name are required');
-    }
-
-    const parentFolderPath = path.join(UPLOADS_DIR, parentFolderName);
-    const subfolderPath = path.join(parentFolderPath, subfolderName);
-
-    if (!fs.existsSync(parentFolderPath)) {
-        return res.status(404).send('Parent folder does not exist');
-    }
-
-    if (!fs.existsSync(subfolderPath)) {
-        fs.mkdirSync(subfolderPath, { recursive: true });
-        console.log(`Created subfolder: ${subfolderPath}`);
-        return res.status(201).send('Subfolder created successfully');
-    } else {
-        console.log(`Subfolder already exists: ${subfolderPath}`);
-        return res.status(400).send('Subfolder already exists');
-    }
-};
-exports.deleteFolder = (req, res) => {
-    const { folderName } = req.body;
-
-    if (!folderName) {
-        return res.status(400).json({ error: "Folder name is required" }); // Respond with JSON
-    }
-
-    const folderPath = path.join(UPLOADS_DIR, folderName);
-
-    if (!fs.existsSync(folderPath)) {
-        return res.status(404).json({ error: "Folder does not exist" }); // Respond with JSON
-    }
-
-    fs.rmdir(folderPath, { recursive: true }, (err) => {
-        if (err) {
-            console.error('Error deleting folder', err);
-            return res.status(500).json({ error: "Error deleting folder" }); // Respond with JSON
-        }
-        console.log(`Deleted folder: ${folderPath}`);
-        res.json({ message: "Folder deleted successfully" }); // Respond with JSON
+// Helper function to delete a file or folder recursively
+const deleteItemRecursive = (itemPath) => {
+  const stats = fs.lstatSync(itemPath);
+  if (stats.isDirectory()) {
+    const files = fs.readdirSync(itemPath);
+    files.forEach((file) => {
+      const filePath = path.join(itemPath, file);
+      deleteItemRecursive(filePath);
     });
+    fs.rmdirSync(itemPath);
+  } else {
+    fs.unlinkSync(itemPath);
+  }
 };
 
+// Create a new folder
+exports.createFolder = async (req, res) => {
+  try {
+    const { parentFolderPath, folderName } = req.body;
+    const newFolderPath = path.join(UPLOADS_DIR, parentFolderPath || "", folderName);
 
+    ensureDirectoryExists(newFolderPath);
 
-exports.editFolder = (req, res) => {
-    const { currentFolderName, newFolderName } = req.body;
+    await db.query("INSERT INTO folders (name, path) VALUES ($1, $2)", [
+      folderName,
+      newFolderPath,
+    ]);
 
-    // Validate input
-    if (!currentFolderName || !newFolderName) {
-        return res.status(400).send('Current folder name and new folder name are required');
-    }
+    res.status(201).json({ message: "Folder created successfully", path: newFolderPath });
+  } catch (error) {
+    console.error("Error creating folder:", error);
+    res.status(500).json({ message: "Error creating folder", error: error.message || error });
+  }
+};
 
-    const currentFolderPath = path.join(UPLOADS_DIR, currentFolderName);
-    const newFolderPath = path.join(UPLOADS_DIR, newFolderName);
-
-    // Check if current folder exists
-    if (!fs.existsSync(currentFolderPath)) {
-        return res.status(404).send('Folder not found');
-    }
-
-    // Ensure new folder name does not already exist
-    if (fs.existsSync(newFolderPath)) {
-        return res.status(400).send('A folder with the new name already exists');
-    }
-
-    // Rename the folder on the filesystem
-    fs.rename(currentFolderPath, newFolderPath, (err) => {
-        if (err) {
-            console.error(`Error renaming folder: ${err.message}`);
-            return res.status(500).send(`Error renaming folder: ${err.message}`);
-        }
-        console.log(`Renamed folder ${currentFolderPath} to ${newFolderPath}`);
-        res.send('Folder renamed successfully');
+// Get the folder structure
+exports.getFolderStructure = async (req, res) => {
+  const readFolderStructure = (dirPath) => {
+    const items = fs.readdirSync(dirPath);
+    return items.map((item) => {
+      const fullPath = path.join(dirPath, item);
+      const isDirectory = fs.lstatSync(fullPath).isDirectory();
+      return {
+        name: item,
+        path: fullPath,
+        type: isDirectory ? "folder" : "file",
+        children: isDirectory ? readFolderStructure(fullPath) : [],
+      };
     });
+  };
+
+  try {
+    const folderStructure = readFolderStructure(UPLOADS_DIR);
+    res.json(folderStructure);
+  } catch (error) {
+    console.error("Error fetching folder structure:", error);
+    res.status(500).json({ message: "Error fetching folder structure", error: error.message || error });
+  }
 };
 
+// Upload a file to a folder
+exports.uploadFile = async (req, res) => {
+  try {
+    const { folderPath } = req.body;
+    const file = req.file; 
 
-exports.editSubfolder = (req, res) => {
-    const { subfolderId, newSubfolderName } = req.body;
-
-    if (!subfolderId || !newSubfolderName) {
-        return res.status(400).send('Subfolder ID and new subfolder name are required');
+    if (!file) {
+      return res.status(400).json({ message: "No file uploaded" });
     }
 
-    // Find the subfolder by ID (you may need to adjust this to your data structure)
-    const subfolder = subfolders.find(sf => sf.id === subfolderId); // Assume subfolders is defined
+    const uploadPath = path.join(UPLOADS_DIR, folderPath, file.originalname);
+    ensureDirectoryExists(path.dirname(uploadPath));
 
-    if (!subfolder) {
-        return res.status(404).send('Subfolder not found');
-    }
+    fs.renameSync(file.path, uploadPath);
 
-    // Store the current subfolder path and prepare the new path
-    const parentFolderPath = path.join(UPLOADS_DIR, subfolder.parentId); // Adjust based on how you manage parent folders
-    const currentSubfolderPath = path.join(parentFolderPath, subfolder.name);
-    const newSubfolderPath = path.join(parentFolderPath, newSubfolderName);
-
-    // Update the subfolder name in memory (if you have a data structure holding this info)
-    subfolder.name = newSubfolderName;
-
-    // Rename the subfolder on the filesystem
-    fs.rename(currentSubfolderPath, newSubfolderPath, (err) => {
-        if (err) {
-            console.error('Error renaming subfolder:', err);
-            return res.status(500).send('Error renaming subfolder');
-        }
-        console.log(`Renamed subfolder ${currentSubfolderPath} to ${newSubfolderPath}`);
-        res.send('Subfolder renamed successfully');
-    });
+    res.status(200).json({ message: "File uploaded successfully", path: uploadPath });
+  } catch (error) {
+    console.error("Error uploading file:", error);
+    res.status(500).json({ message: "Error uploading file", error: error.message || error });
+  }
 };
 
+// Rename a file or folder
+exports.renameItem = async (req, res) => {
+  const { itemPath, newName } = req.body;
 
-exports.deleteSubfolder = (req, res) => {
-    const { parentFolderName, subfolderName } = req.body;
-
-    if (!parentFolderName || !subfolderName) {
-        return res.status(400).send('Parent folder name and subfolder name are required');
+  try {
+    if (!itemPath || !newName) {
+      return res.status(400).json({ message: "Item path and new name are required" });
     }
 
-    // Construct the full path to the subfolder
-    const subfolderPath = path.join(UPLOADS_DIR, parentFolderName, subfolderName);
+    const oldPath = path.resolve(itemPath);
+    const newPath = path.resolve(path.dirname(itemPath), newName);
 
-    // Check if the subfolder exists
-    if (!fs.existsSync(subfolderPath)) {
-        return res.status(404).send('Subfolder does not exist');
+    if (!fs.existsSync(oldPath)) {
+      return res.status(404).json({ message: "Item not found" });
     }
 
-    // Delete the subfolder recursively
-    fs.rmdir(subfolderPath, { recursive: true }, (err) => {
-        if (err) {
-            console.error('Error deleting subfolder:', err);
-            return res.status(500).send('Error deleting subfolder');
-        }
-        console.log(`Deleted subfolder: ${subfolderPath}`);
-        res.send('Subfolder deleted successfully');
-    });
+    fs.renameSync(oldPath, newPath);
+
+    // Optionally update the database if necessary
+    await db.query("UPDATE folders SET name = $1 WHERE path = $2", [
+      newName,
+      oldPath,
+    ]);
+
+    res.status(200).json({ message: "Item renamed successfully", newPath });
+  } catch (error) {
+    console.error("Error renaming item:", error);
+    res.status(500).json({ message: "Error renaming item", error: error.message || error });
+  }
 };
 
-exports.getFolderStructure = (req, res) => {
-    const getFolderStructure = (dirPath) => {
-        const files = fs.readdirSync(dirPath);
-        const folderStructure = [];
+// Delete a file or folder
+exports.deleteItem = async (req, res) => {
+  const { itemPath } = req.body;
 
-        files.forEach(file => {
-            const filePath = path.join(dirPath, file);
-            const isDirectory = fs.lstatSync(filePath).isDirectory();
-
-            if (isDirectory) {
-                folderStructure.push({
-                    name: file,
-                    type: 'folder',
-                    children: getFolderStructure(filePath)
-                });
-            } else {
-                const publicPath = `/uploads/${path.relative(__dirname, filePath)}`;
-                folderStructure.push({
-                    name: file,
-                    type: 'file',
-                    path: publicPath
-                });
-            }
-        });
-
-        return folderStructure;
-    };
-
-    const directoryPath = UPLOADS_DIR;
-    try {
-        const folderStructure = getFolderStructure(directoryPath);
-        res.json(folderStructure);
-    } catch (err) {
-        console.error('Error reading folder structure', err);
-        res.status(500).send('Error retrieving folder structure');
+  try {
+    if (!itemPath) {
+      return res.status(400).json({ message: "Item path is required" });
     }
-};
 
-// The existing getFolderStructure function can remain unchanged
+    const itemFullPath = path.resolve(itemPath);
+
+    if (!fs.existsSync(itemFullPath)) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+
+    deleteItemRecursive(itemFullPath);
+
+    // Optionally delete from the database
+    await db.query("DELETE FROM folders WHERE path = $1", [itemFullPath]);
+
+    res.status(200).json({ message: "Item deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting item:", error);
+    res.status(500).json({ message: "Error deleting item", error: error.message || error });
+  }
+};

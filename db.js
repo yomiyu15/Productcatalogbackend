@@ -1,18 +1,26 @@
 const { Client } = require('pg');
 
-// Database connection configuration
+// Create a new client instance
 const client = new Client({
-    user: 'postgres',      // Replace with your PostgreSQL username
-    host: 'localhost',     // PostgreSQL server host
-    database: 'Product2',  // Replace with your existing database name
-    password: 'yoomii0929', // Replace with your password
-    port: 5432,            // PostgreSQL server port
+    user: 'postgres',
+    host: 'localhost',
+    database: 'Product2',
+    password: 'yoomii0929',
+    port: 5432,
 });
 
-// Connect to the database
-client.connect()
-    .then(() => console.log('Connected to PostgreSQL database'))
-    .catch(err => console.error('Database connection error', err));
+const connectDb = async () => {
+    try {
+        // Establish connection to the database
+        await client.connect();
+        console.log('Connected to PostgreSQL database');
+    } catch (err) {
+        console.error('Database connection error', err.stack);
+    }
+};
 
-// Exporting client
-module.exports = { client };
+// Call the connection function
+connectDb();
+
+// Export the client so it can be used in other parts of the application
+module.exports = client;

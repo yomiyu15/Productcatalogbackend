@@ -1,6 +1,6 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { client } = require('../db'); // Correct import of client
+const client = require('../db'); // Importing the client from db.js
 
 // User registration endpoint
 exports.register = async (req, res) => {
@@ -12,6 +12,11 @@ exports.register = async (req, res) => {
     }
 
     try {
+        // Check if the client is properly initialized
+        if (!client._connected) {
+            return res.status(500).send('Database not connected');
+        }
+
         // Hash the password
         const hashedPassword = await bcrypt.hash(password, 10);
         const query = 'INSERT INTO users(username, password, isAdmin) VALUES($1, $2, $3) RETURNING id';
@@ -35,12 +40,22 @@ exports.login = async (req, res) => {
     }
 
     try {
+        // Check if the client is properly initialized
+        if (!client._connected) {
+            return res.status(500).send('Database not connected');
+        }
+
         const query = 'SELECT * FROM users WHERE username = $1';
         const result = await client.query(query, [username]);
+
+        if (result.rows.length === 0) {
+            return res.status(401).send('Invalid username or password');
+        }
+
         const user = result.rows[0];
 
-        // Check if user exists and password matches
-        if (user && await bcrypt.compare(password, user.password)) {
+        // Check if password matches
+        if (await bcrypt.compare(password, user.password)) {
             console.log("JWT_SECRET:", process.env.JWT_SECRET); // Debugging log
 
             if (!process.env.JWT_SECRET) {
