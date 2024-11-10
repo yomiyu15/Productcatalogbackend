@@ -93,15 +93,13 @@ exports.renameItem = async (req, res) => {
 
   try {
     if (!itemPath || !newName) {
-      return res
-        .status(400)
-        .json({ message: "Item path and new name are required" });
+      return res.status(400).json({ message: "Item path and new name are required" });
     }
 
-    const oldPath = path.resolve(itemPath); // Resolving the item path
-    const newPath = path.resolve(path.dirname(itemPath), newName); // Create new path based on current directory
+    // Normalize path format (handle Windows backslashes)
+    const oldPath = path.resolve(itemPath).replace(/\\/g, '/');
+    const newPath = path.resolve(path.dirname(itemPath), newName).replace(/\\/g, '/');
 
-    // Debugging logs
     console.log("Old Path:", oldPath);
     console.log("New Path:", newPath);
 
@@ -111,28 +109,22 @@ exports.renameItem = async (req, res) => {
 
     // Ensure new path doesn't already exist
     if (fs.existsSync(newPath)) {
-      return res
-        .status(400)
-        .json({ message: "A folder or file with the new name already exists" });
+      return res.status(400).json({ message: "A folder or file with the new name already exists" });
     }
 
-    // Renaming the folder
+    // Renaming the folder or file
     fs.renameSync(oldPath, newPath);
 
     // Optionally update the database if necessary
-    await db.query("UPDATE folders SET name = $1 WHERE path = $2", [
-      newName,
-      oldPath,
-    ]);
+    await db.query("UPDATE folders SET name = $1 WHERE path = $2", [newName, oldPath]);
 
     res.status(200).json({ message: "Item renamed successfully", newPath });
   } catch (error) {
     console.error("Error renaming item:", error);
-    res
-      .status(500)
-      .json({ message: "Error renaming item", error: error.message || error });
+    res.status(500).json({ message: "Error renaming item", error: error.message || error });
   }
 };
+
 
 // Delete a file or folder
 exports.deleteItem = async (req, res) => {
