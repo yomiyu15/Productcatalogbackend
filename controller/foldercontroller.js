@@ -1,12 +1,11 @@
 const fs = require("fs");
 const path = require("path");
-const db = require("../db"); // Import the database client
+const db = require("../db");
+const multer = require("multer");
 
 const UPLOADS_DIR = path.join(__dirname, "../uploads");
 
-
-
-// Helper function to create a directory if it doesn't exist
+// Helper function to create the folder if it doesn't exist
 const ensureDirectoryExists = (folderPath) => {
   if (!fs.existsSync(folderPath)) {
     fs.mkdirSync(folderPath, { recursive: true });
@@ -32,7 +31,11 @@ const deleteItemRecursive = (itemPath) => {
 exports.createFolder = async (req, res) => {
   try {
     const { parentFolderPath, folderName } = req.body;
-    const newFolderPath = path.join(UPLOADS_DIR, parentFolderPath || "", folderName);
+    const newFolderPath = path.join(
+      UPLOADS_DIR,
+      parentFolderPath || "",
+      folderName
+    );
 
     ensureDirectoryExists(newFolderPath);
 
@@ -41,10 +44,17 @@ exports.createFolder = async (req, res) => {
       newFolderPath,
     ]);
 
-    res.status(201).json({ message: "Folder created successfully", path: newFolderPath });
+    res
+      .status(201)
+      .json({ message: "Folder created successfully", path: newFolderPath });
   } catch (error) {
     console.error("Error creating folder:", error);
-    res.status(500).json({ message: "Error creating folder", error: error.message || error });
+    res
+      .status(500)
+      .json({
+        message: "Error creating folder",
+        error: error.message || error,
+      });
   }
 };
 
@@ -69,48 +79,44 @@ exports.getFolderStructure = async (req, res) => {
     res.json(folderStructure);
   } catch (error) {
     console.error("Error fetching folder structure:", error);
-    res.status(500).json({ message: "Error fetching folder structure", error: error.message || error });
+    res
+      .status(500)
+      .json({
+        message: "Error fetching folder structure",
+        error: error.message || error,
+      });
   }
 };
 
-// Upload a file to a folder
-exports.uploadFile = async (req, res) => {
-  try {
-    const { folderPath } = req.body;
-    const file = req.file; 
-
-    if (!file) {
-      return res.status(400).json({ message: "No file uploaded" });
-    }
-
-    const uploadPath = path.join(UPLOADS_DIR, folderPath, file.originalname);
-    ensureDirectoryExists(path.dirname(uploadPath));
-
-    fs.renameSync(file.path, uploadPath);
-
-    res.status(200).json({ message: "File uploaded successfully", path: uploadPath });
-  } catch (error) {
-    console.error("Error uploading file:", error);
-    res.status(500).json({ message: "Error uploading file", error: error.message || error });
-  }
-};
-
-// Rename a file or folder
 exports.renameItem = async (req, res) => {
   const { itemPath, newName } = req.body;
 
   try {
     if (!itemPath || !newName) {
-      return res.status(400).json({ message: "Item path and new name are required" });
+      return res
+        .status(400)
+        .json({ message: "Item path and new name are required" });
     }
 
-    const oldPath = path.resolve(itemPath);
-    const newPath = path.resolve(path.dirname(itemPath), newName);
+    const oldPath = path.resolve(itemPath); // Resolving the item path
+    const newPath = path.resolve(path.dirname(itemPath), newName); // Create new path based on current directory
+
+    // Debugging logs
+    console.log("Old Path:", oldPath);
+    console.log("New Path:", newPath);
 
     if (!fs.existsSync(oldPath)) {
       return res.status(404).json({ message: "Item not found" });
     }
 
+    // Ensure new path doesn't already exist
+    if (fs.existsSync(newPath)) {
+      return res
+        .status(400)
+        .json({ message: "A folder or file with the new name already exists" });
+    }
+
+    // Renaming the folder
     fs.renameSync(oldPath, newPath);
 
     // Optionally update the database if necessary
@@ -122,7 +128,9 @@ exports.renameItem = async (req, res) => {
     res.status(200).json({ message: "Item renamed successfully", newPath });
   } catch (error) {
     console.error("Error renaming item:", error);
-    res.status(500).json({ message: "Error renaming item", error: error.message || error });
+    res
+      .status(500)
+      .json({ message: "Error renaming item", error: error.message || error });
   }
 };
 
@@ -149,6 +157,8 @@ exports.deleteItem = async (req, res) => {
     res.status(200).json({ message: "Item deleted successfully" });
   } catch (error) {
     console.error("Error deleting item:", error);
-    res.status(500).json({ message: "Error deleting item", error: error.message || error });
+    res
+      .status(500)
+      .json({ message: "Error deleting item", error: error.message || error });
   }
 };

@@ -18,7 +18,7 @@ const authRoute = require('./route/authroute');
 
 
 const app = express();
-app.use(fileUpload());
+
 
 // Debugging log to check if JWT_SECRET is loaded
 console.log("JWT_SECRET:", process.env.JWT_SECRET);
