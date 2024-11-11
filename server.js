@@ -14,6 +14,7 @@ const authenticateJWT = require('./middleware/auth'); // Importing the authentic
 const fileRoute = require('./route/fileroutes');
 const folderRoute = require('./route/folderroute'); 
 const authRoute = require('./route/authroute');
+const faq  = require('./route/faqroute');
 
 
 
@@ -41,6 +42,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/files', fileRoute);      // Route for file operations
 app.use('/api/folders', folderRoute);  // Route for folder operations
 app.use('/api/auth', authRoute);       // Route for authentication
+app.use('/api', faq);       // Route for authentication
+
 
 
 // Error handling middleware
