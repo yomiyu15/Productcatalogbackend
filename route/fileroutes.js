@@ -34,5 +34,24 @@ const ensureDirectoryExists = (folderPath) => {
 
 // POST route for file upload
 router.post('/upload-file', upload.single('file'), fileController.uploadFile);
+router.get('/view-pdf', (req, res) => {
+  const { folderPath, fileName } = req.query;
+  console.log('Received query params:', req.query);  // Log all query params
+
+  if (!folderPath || !fileName) {
+    console.error('Missing folderPath or fileName');
+    return res.status(400).json({ message: 'Folder and file parameters are required' });
+  }
+
+  const filePath = path.join(__dirname, '../uploads', folderPath, fileName);
+  console.log('Serving file from path:', filePath);
+
+  res.sendFile(filePath, (err) => {
+    if (err) {
+      console.error('Error serving PDF:', err);
+      return res.status(500).json({ message: 'Error retrieving PDF' });
+    }
+  });
+});
 
 module.exports = router;
