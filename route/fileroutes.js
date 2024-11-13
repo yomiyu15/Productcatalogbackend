@@ -43,9 +43,17 @@ router.get('/view-pdf', (req, res) => {
     return res.status(400).json({ message: 'Folder and file parameters are required' });
   }
 
+  // Construct the path dynamically
   const filePath = path.join(__dirname, '../uploads', folderPath, fileName);
-  console.log('Serving file from path:', filePath);
+  console.log('Constructed file path:', filePath);
 
+  // Check if the file exists
+  if (!fs.existsSync(filePath)) {
+    console.error('File not found:', filePath);
+    return res.status(404).json({ message: 'File not found' });
+  }
+
+  // Send the file
   res.sendFile(filePath, (err) => {
     if (err) {
       console.error('Error serving PDF:', err);
@@ -54,4 +62,90 @@ router.get('/view-pdf', (req, res) => {
   });
 });
 
+
+const getAllFiles = (dirPath, arrayOfFiles = []) => {
+  const files = fs.readdirSync(dirPath);
+
+  files.forEach(file => {
+    const filePath = path.join(dirPath, file);
+    if (fs.statSync(filePath).isDirectory()) {
+      arrayOfFiles = getAllFiles(filePath, arrayOfFiles);
+    } else {
+      const relativePath = path.relative(path.join(__dirname, '../uploads'), filePath).replace(/\\/g, '/');
+
+      // Split the relative path to get folderPath and fileName separately
+      const [folderPath, fileName] = relativePath.split('/').reduce((acc, part, index, arr) => {
+        if (index === arr.length - 1) {
+          acc[1] = part; // fileName (last part)
+        } else {
+          acc[0] = acc[0] ? acc[0] + '/' + part : part; // folderPath (all parts except the last one)
+        }
+        return acc;
+      }, []);
+
+      arrayOfFiles.push({
+        name: file,
+        path: relativePath,  // Relative path from uploads folder
+        viewUrl: `http://localhost:5000/api/files/view-pdf?folderPath=${encodeURIComponent(folderPath)}&fileName=${encodeURIComponent(fileName)}`
+      });
+    }
+  });
+
+  return arrayOfFiles;
+};
+
+
+
+// Route to list all files starting from the root uploads directory
+router.get('/list-all-files', (req, res) => {
+  const rootDirectory = path.join(__dirname, '../uploads');
+  const { search } = req.query; // Capture search query
+
+  if (!fs.existsSync(rootDirectory)) {
+    return res.status(404).json({ message: 'Root folder not found' });
+  }
+
+  try {
+    let allFiles = getAllFiles(rootDirectory);
+
+    // If search query is provided, filter files by filename
+    if (search) {
+      allFiles = allFiles.filter(file => 
+        file.name.toLowerCase().includes(search.toLowerCase())
+      );
+    }
+
+    res.json(allFiles);
+  } catch (error) {
+    console.error('Error listing all files:', error);
+    res.status(500).json({ message: 'Error retrieving file list' });
+  }
+});
+
+// Route to view a specific PDF file by its path
+router.get('/view', (req, res) => {
+  const { filePath } = req.query; // filePath from the query string
+
+  if (!filePath) {
+    return res.status(400).json({ message: 'File path is required' });
+  }
+
+  const fullPath = path.join(__dirname, '../uploads', filePath); // Full path to the file
+
+  // Check if the file exists
+  if (!fs.existsSync(fullPath)) {
+    return res.status(404).json({ message: 'File not found' });
+  }
+
+  // Send the file to the client
+  res.sendFile(fullPath, (err) => {
+    if (err) {
+      console.error('Error serving PDF:', err);
+      return res.status(500).json({ message: 'Error retrieving PDF' });
+    }
+  });
+});
+
+
 module.exports = router;
+
