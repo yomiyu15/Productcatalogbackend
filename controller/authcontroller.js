@@ -73,3 +73,8 @@ exports.login = async (req, res) => {
         res.status(500).send('Error logging in');
     }
 };
+// User logout endpoint
+exports.logout = (req, res) => {
+    // For JWT, just inform the client to remove the token from storage
+    res.status(200).send('Logged out successfully');
+};

@@ -26,7 +26,7 @@ console.log("JWT_SECRET:", process.env.JWT_SECRET);
 
 // Enable CORS for all routes
 app.use(cors({
-    origin: 'http://localhost:3001',
+    origin: 'http://localhost:3000',
     methods: ['GET', 'POST', 'DELETE'],
     preflightContinue: true,
 }));
